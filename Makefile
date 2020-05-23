@@ -1,11 +1,10 @@
-IMAGE 		?= aws-health-exporter
+IMAGE 		?= aws-instance-health-exporter
 VERSION 	= $(shell git describe --always --tags --dirty)
 GO_PACKAGES = $(shell go list ./... | grep -v /vendor/)
 
 all: format build test
 
 test:
-	@echo ">> running tests"
 	@go test $(GO_PACKAGES)
 
 format:
@@ -13,11 +12,9 @@ format:
 	@go fmt $(GO_PACKAGES)
 
 build:
-	@echo ">> building binaries"
 	@go build
 
 docker:
-	@echo ">> building docker image"
 	@docker build \
 		--build-arg SOURCE_COMMIT="$(VERSION)" \
 		-t $(IMAGE):$(VERSION) \
