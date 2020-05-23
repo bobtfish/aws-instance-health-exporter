@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/health"
 	"github.com/aws/aws-sdk-go/service/health/healthiface"
@@ -24,6 +25,15 @@ func (api *mockHealthAPI) DescribeEventsPages(in *health.DescribeEventsInput, fn
 
 type mockEC2Client struct {
 	ec2iface.EC2API
+}
+
+func (client *mockEC2Client) DescribeInstanceStatus(in *ec2.DescribeInstanceStatusInput) (*ec2.DescribeInstanceStatusOutput, error) {
+	statuses := make([]*ec2.InstanceStatus, 0)
+	output := ec2.DescribeInstanceStatusOutput{
+		InstanceStatuses: statuses,
+		NextToken:        nil,
+	}
+	return &output, nil
 }
 
 func TestScrape(t *testing.T) {
