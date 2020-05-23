@@ -12,4 +12,4 @@ FROM alpine:latest
 COPY --from=build /go/bin/aws-instance-health-exporter /bin
 
 ENTRYPOINT  [ "/bin/aws-instance-health-exporter" ]
-EXPOSE      9383
+EXPOSE      9165

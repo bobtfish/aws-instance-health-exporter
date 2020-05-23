@@ -43,7 +43,7 @@ Flag | Description
 -----|-----
 `--help` | Show help.
 `--version` | Print version information
-`--web.listen-address` | The address to listen on for HTTP requests. Default: ":9383"
+`--web.listen-address` | The address to listen on for HTTP requests. Default: ":9165"
 `--aws.region` | A list of AWS regions that are used to filter events
 
 ## Docker
@@ -53,7 +53,7 @@ You can deploy this exporter using the [bobtfish/aws-instance-health-exporter](h
 Example
 ```
 docker pull bobtfish/aws-instance-health-exporter
-docker run -p 9383:9383 bobtfish/aws-instance-health-exporter
+docker run -p 9165:9165 bobtfish/aws-instance-health-exporter
 ```
 
 ### Credentials
