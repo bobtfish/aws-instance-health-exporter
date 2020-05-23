@@ -76,7 +76,7 @@ func TestScrape(t *testing.T) {
 	}
 
 	gv := prometheus.NewGaugeVec(eventOpts, labels)
-	e.scrape(gv)
+	e.scrapeHealth(gv)
 
 	validateMetric(t, gv, events[0], 1.)
 	validateMetric(t, gv, events[1], 1.)

@@ -37,7 +37,7 @@ const (
 	// LabelStatusCode defines the status of the event, e.g. open, upcoming, closed
 	LabelStatusCode = "status_code"
 	// Namespace is the metrics prefix
-	Namespace = "aws_health"
+	Namespace = "aws_instance_health"
 )
 
 var (
@@ -74,11 +74,11 @@ func (e *exporter) Describe(ch chan<- *prometheus.Desc) {
 
 func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 	gv := prometheus.NewGaugeVec(eventOpts, labels)
-	e.scrape(gv)
+	e.scrapeHealth(gv)
 	gv.Collect(ch)
 }
 
-func (e *exporter) scrape(gv *prometheus.GaugeVec) {
+func (e *exporter) scrapeHealth(gv *prometheus.GaugeVec) {
 	var events []*health.Event
 
 	err := e.api.DescribeEventsPages(&health.DescribeEventsInput{
@@ -153,9 +153,9 @@ func main() {
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
-             <head><title>AWS Health Exporter</title></head>
+             <head><title>AWS Instance Health Exporter</title></head>
              <body>
-             <h1>AWS Health Exporter</h1>
+             <h1>AWS Instance Health Exporter</h1>
              <p><a href='/metrics'>Metrics</a></p>
              </body>
              </html>`))
