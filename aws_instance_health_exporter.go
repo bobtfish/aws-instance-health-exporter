@@ -12,6 +12,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/health"
 	"github.com/aws/aws-sdk-go/service/health/healthiface"
 
@@ -57,6 +59,7 @@ var (
 
 type exporter struct {
 	api    healthiface.HealthAPI
+	client ec2iface.EC2API
 	filter *health.EventFilter
 }
 
@@ -100,7 +103,7 @@ func (e *exporter) scrape(gv *prometheus.GaugeVec) {
 }
 
 func init() {
-	prometheus.MustRegister(version.NewCollector("aws_health_exporter"))
+	prometheus.MustRegister(version.NewCollector("aws_instance_health_exporter"))
 }
 
 func main() {
@@ -125,7 +128,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	log.Printf("Starting `aws-health-exporter`: Build Time: '%s' Build SHA-1: '%s'\n", BuildTime, Version)
+	log.Printf("Starting `aws-instance-health-exporter`: Build Time: '%s' Build SHA-1: '%s'\n", BuildTime, Version)
 
 	sess, err := session.NewSession(&aws.Config{Region: aws.String(APIRegion)})
 	if err != nil {
@@ -143,7 +146,7 @@ func main() {
 		filter.Services = aws.StringSlice(*services)
 	}
 
-	exporter := &exporter{api: health.New(sess), filter: filter}
+	exporter := &exporter{api: health.New(sess), client: ec2.New(sess), filter: filter}
 	prometheus.MustRegister(exporter)
 
 	mux := http.NewServeMux()

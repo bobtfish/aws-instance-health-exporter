@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/health"
 	"github.com/aws/aws-sdk-go/service/health/healthiface"
 	"github.com/prometheus/client_golang/prometheus"
@@ -19,6 +20,10 @@ func (api *mockHealthAPI) DescribeEventsPages(in *health.DescribeEventsInput, fn
 	output := health.DescribeEventsOutput{Events: api.events}
 	fn(&output, false)
 	return nil
+}
+
+type mockEC2Client struct {
+	ec2iface.EC2API
 }
 
 func TestScrape(t *testing.T) {
@@ -56,6 +61,7 @@ func TestScrape(t *testing.T) {
 	}
 	e := &exporter{
 		api:    &mockHealthAPI{events: events},
+		client: &mockEC2Client{},
 		filter: &health.EventFilter{},
 	}
 
