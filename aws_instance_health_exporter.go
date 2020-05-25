@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -32,7 +34,6 @@ var (
 	Version = "N/A"
 
 	instanceEvents *prometheus.Desc
-	statusOk       *prometheus.Desc
 )
 
 type exporter struct {
@@ -41,16 +42,14 @@ type exporter struct {
 
 func (e *exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- instanceEvents
-	ch <- statusOk
 }
 
 func (e *exporter) Collect(ch chan<- prometheus.Metric) {
-	allIs := make([]*ec2.InstanceStatus, 0)
 	more := true
 	var nextToken *string
 	for more == true {
 		is, err := e.client.DescribeInstanceStatus(&ec2.DescribeInstanceStatusInput{
-			IncludeAllInstances: aws.Bool(true),
+			IncludeAllInstances: aws.Bool(false),
 			MaxResults:          aws.Int64(1000),
 			NextToken:           nextToken,
 		})
@@ -58,8 +57,18 @@ func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 			panic(err)
 		}
 		for _, s := range is.InstanceStatuses {
-			fmt.Println("instance %s instance state %s system status %s", *s.InstanceId, *s.InstanceStatus.Status, *s.SystemStatus.Status)
-			allIs = append(allIs, s)
+			eventCount := len(s.Events)
+			if eventCount > 0 {
+				for _, e := range s.Events {
+					fmt.Printf("    %v\n", e)
+					if strings.HasPrefix(*e.Description, "[Completed]") {
+						continue
+					}
+					eventTime := *e.NotBefore
+					d := eventTime.Sub(time.Now())
+					ch <- prometheus.MustNewConstMetric(instanceEvents, prometheus.GaugeValue, d.Seconds(), *e.Code, *s.InstanceId)
+				}
+			}
 		}
 		if is.NextToken == nil {
 			more = false
@@ -67,20 +76,13 @@ func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 			nextToken = is.NextToken
 		}
 	}
-	ch <- prometheus.MustNewConstMetric(instanceEvents, prometheus.GaugeValue, float64(1), "i-1234")
 }
 
 func init() {
 	instanceEvents = prometheus.NewDesc(
 		prometheus.BuildFQName(Namespace, "health", "events"),
 		"events for instances",
-		[]string{"instance_id"},
-		nil,
-	)
-	statusOk = prometheus.NewDesc(
-		prometheus.BuildFQName(Namespace, "health", "status_ok"),
-		"Health status for instance",
-		[]string{"health_type", "instance_id"},
+		[]string{"event_code", "instance_id"},
 		nil,
 	)
 	prometheus.MustRegister(version.NewCollector("aws_instance_health_exporter"))
