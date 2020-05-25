@@ -79,8 +79,8 @@ func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 
 func init() {
 	instanceEvents = prometheus.NewDesc(
-		prometheus.BuildFQName(Namespace, "health", "events"),
-		"events for instances",
+		prometheus.BuildFQName(Namespace, "instance", "events"),
+		"Upcoming events for instances - metric value is the number of seconds until the event",
 		[]string{"event_code", "instance_id"},
 		nil,
 	)

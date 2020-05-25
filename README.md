@@ -14,29 +14,22 @@ make
 ```
 
 ## Exposed metrics
-The `aws-instance-health-exporter` exports metrics for instance status and instance events .
+The `aws-instance-health-exporter` exports metrics for AWS instance events which are upcoming. The metric is a gauge of the number of seconds until the event.
 
 Example
 ```
-# FIXME
-aws_instance_events{status_code="open", region="us-east-1", category="issue"}
+aws_instance_health_instance_events{event_code="instance-stop",instance_id="i-073d75d9dbede0a9a"} 650479.801696224
 ```
 
 Name | Description | Labels
 -----|-----|-----
-# FIXME
-aws_health_events | AWS Health events | category, region, service, status_code
+aws_instance_health_instance_events | Upcoming AWS Health events for your instances | event_code, instance_id
 
 ### Labels Explained
 Label | Description
 -----|-----
-# FIXMe
-category | The category of the event. Possible events are issue, accountNotification and scheduledChange.
-region | The AWS region name of the event. E.g. us-east-1.
-service | The AWS service that is affected by the event. For example, EC2, RDS.
-status_code | The most recent status of the event. Possible values are open, closed, and upcoming.
-
-The labels match the corresponding `AWS Event` content - for a more detailed and up-to-date explanation see the offical documention [here](http://docs.aws.amazon.com/health/latest/APIReference/API_Event.html)
+event_code | The type of the event. Possible values are open, closed, and upcoming. For more info see the offical documentation [here](https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-instance-status.html)
+instance_id | The EC2 instance ID to which the event applies.
 
 ## Flags
 Flag | Description
@@ -47,7 +40,6 @@ Flag | Description
 `--aws.region` | A list of AWS regions that are used to filter events
 
 ## Docker
-FIXME
 You can deploy this exporter using the [bobtfish/aws-instance-health-exporter](https://hub.docker.com/r/bobtfish/aws-instance-health-exporter/) Docker Image.
 
 Example
