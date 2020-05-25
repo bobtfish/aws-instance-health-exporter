@@ -1,10 +1,13 @@
 package main
 
 import (
-	"testing"
-
+	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
+	"github.com/prometheus/client_golang/prometheus"
+	"testing"
+	"time"
 )
 
 type mockEC2Client struct {
@@ -21,55 +24,46 @@ func (client *mockEC2Client) DescribeInstanceStatus(in *ec2.DescribeInstanceStat
 }
 
 func TestScrape(t *testing.T) {
-	var statuses = []*ec2.InstanceStatus{}
-	/*		&health.Event{
-				EventTypeCategory: aws.String("issue"),
-				Region:            aws.String("eu-west-1"),
-				Service:           aws.String("EC2"),
-				StatusCode:        aws.String("open"),
+	now := time.Now()
+	var statuses = []*ec2.InstanceStatus{
+		&ec2.InstanceStatus{
+			InstanceId: aws.String("i-1234"),
+			Events: []*ec2.InstanceStatusEvent{
+				&ec2.InstanceStatusEvent{
+					Code:        aws.String("foo"),
+					NotBefore:   &now,
+					Description: aws.String("something reboot this way comes"),
+				},
 			},
-			&health.Event{
-				EventTypeCategory: aws.String("issue"),
-				Region:            aws.String("us-east-1"),
-				Service:           aws.String("EC2"),
-				StatusCode:        aws.String("open"),
+		},
+		&ec2.InstanceStatus{
+			InstanceId: aws.String("i-2345"),
+			Events: []*ec2.InstanceStatusEvent{
+				&ec2.InstanceStatusEvent{
+					Code:        aws.String("foo"),
+					NotBefore:   &now,
+					Description: aws.String("[Completed] something reboot this way comes"),
+				},
 			},
-			&health.Event{
-				EventTypeCategory: aws.String("issue"),
-				Region:            aws.String("us-east-1"),
-				Service:           aws.String("LAMBDA"),
-				StatusCode:        aws.String("closed"),
-			},
-			&health.Event{
-				EventTypeCategory: aws.String("issue"),
-				Region:            aws.String("us-east-1"),
-				Service:           aws.String("LAMBDA"),
-				StatusCode:        aws.String("closed"),
-			},
-			&health.Event{
-				EventTypeCategory: aws.String("issue"),
-				Region:            aws.String("us-east-1"),
-				Service:           aws.String("LAMBDA"),
-				StatusCode:        aws.String("closed"),
-			},
-		}*/
+		},
+	}
 	e := &exporter{
 		client: &mockEC2Client{statuses: statuses},
 	}
-	e.Collect(nil)
-	//validateMetric(t, gv, events[0], 1.)
-	//validateMetric(t, gv, events[1], 1.)
-	//validateMetric(t, gv, events[2], 3.)
-}
-
-/*
-func validateMetric(t *testing.T, vec *prometheus.GaugeVec, e *health.Event, expectedVal float64) {
-	m := vec.WithLabelValues(*e.EventTypeCategory, *e.Region, *e.Service, *e.StatusCode)
-	pb := &dto.Metric{}
-	m.Write(pb)
-
-	val := pb.GetGauge().GetValue()
-	if pb.GetGauge().GetValue() != expectedVal {
-		t.Errorf("Invalid value - Expected: %v Got: %v", expectedVal, val)
+	c := make(chan prometheus.Metric)
+	go func() {
+		defer close(c)
+		e.Collect(c)
+	}()
+	metrics := make([]prometheus.Metric, 0)
+	for m := range c {
+		metrics = append(metrics, m)
+		fmt.Println(m)
 	}
-} */
+
+	expMetrics := 1
+
+	if len(metrics) != expMetrics {
+		t.Errorf("Got %d metrics, not %d", len(metrics), expMetrics)
+	}
+}

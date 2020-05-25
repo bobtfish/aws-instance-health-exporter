@@ -60,7 +60,6 @@ func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 			eventCount := len(s.Events)
 			if eventCount > 0 {
 				for _, e := range s.Events {
-					fmt.Printf("    %v\n", e)
 					if strings.HasPrefix(*e.Description, "[Completed]") {
 						continue
 					}
