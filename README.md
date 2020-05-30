@@ -38,6 +38,7 @@ Flag | Description
 `--version` | Print version information
 `--web.listen-address` | The address to listen on for HTTP requests. Default: ":9165"
 `--aws.region` | A list of AWS regions that are used to filter events
+`--web.disable-exporter-metrics` | Disable metrics about the exporter itself (promhttp_*, process_*, go_*).
 
 ## Docker
 You can deploy this exporter using the [bobtfish/aws-instance-health-exporter](https://hub.docker.com/r/bobtfish/aws-instance-health-exporter/) Docker Image.
