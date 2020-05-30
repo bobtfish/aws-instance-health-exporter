@@ -89,9 +89,15 @@ func init() {
 
 func main() {
 	var (
-		showVersion = kingpin.Flag("version", "Print version information").Bool()
-		listenAddr  = kingpin.Flag("web.listen-address", "The address to listen on for HTTP requests.").Default(":9165").String()
-		region      = kingpin.Flag("aws.region", "The AWS region").Default("us-east-1").String()
+		showVersion            = kingpin.Flag("version", "Print version information").Bool()
+		listenAddr             = kingpin.Flag("web.listen-address", "The address to listen on for HTTP requests.").Default(":9165").String()
+		region                 = kingpin.Flag("aws.region", "The AWS region").Default("us-east-1").String()
+		disableExporterMetrics = kingpin.Flag(
+			"web.disable-exporter-metrics",
+			"Exclude metrics about the exporter itself (promhttp_*, process_*, go_*).",
+		).Bool()
+		exporterMetricsRegistry = prometheus.NewRegistry()
+		metricsRegistry         = prometheus.NewRegistry()
 	)
 
 	registerSignals()
@@ -109,16 +115,27 @@ func main() {
 
 	log.Printf("Starting `aws-instance-health-exporter`: Build Time: '%s' Build SHA-1: '%s'\n", BuildTime, Version)
 
+	if !*disableExporterMetrics {
+		exporterMetricsRegistry.MustRegister(
+			prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+			prometheus.NewGoCollector(),
+		)
+	}
+
 	sess, err := session.NewSession(&aws.Config{Region: region})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	exporter := &exporter{client: ec2.New(sess)}
-	prometheus.MustRegister(exporter)
+	metricsRegistry.MustRegister(exporter)
+	handler := promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
+	if !*disableExporterMetrics {
+		handler = promhttp.InstrumentMetricHandler(exporterMetricsRegistry, handler)
+	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", handler)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
              <head><title>AWS Instance Health Exporter</title></head>
