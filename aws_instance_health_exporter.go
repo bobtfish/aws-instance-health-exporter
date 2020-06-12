@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -80,6 +81,30 @@ func getEvents(client ec2iface.EC2API) ([]instanceEvent, error) {
 	return events, nil
 }
 
+var (
+	cachedEvents []instanceEvent
+	cacheMutex   sync.Mutex
+	cachedAt     time.Time
+)
+
+// Deliberately return the cached result for concurrent calls, even
+// if cache time is set to zero to avoid hitting the API serially
+func getEventsCached(client ec2iface.EC2API, howOld int) ([]instanceEvent, error) {
+	now := time.Now() // Store now from before we try to get the lock
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	if cachedAt.Add(time.Duration(howOld)).Before(now) {
+		events, err := getEvents(client)
+		if err != nil { // Do not populate the cache if there was an error
+			return events, err
+		}
+		cachedEvents = events
+		// Set cachedAt to now *after* getting events
+		cachedAt = time.Now()
+	}
+	return cachedEvents, nil
+}
+
 type exporter struct {
 	client   ec2iface.EC2API
 	cacheFor int
@@ -90,7 +115,7 @@ func (e *exporter) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (e *exporter) Collect(ch chan<- prometheus.Metric) {
-	events, err := getEvents(e.client)
+	events, err := getEventsCached(e.client, e.cacheFor)
 	if err != nil {
 		panic(err)
 	}
@@ -101,6 +126,7 @@ func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 }
 
 func init() {
+	cachedEvents = make([]instanceEvent, 0)
 	instanceEvents = prometheus.NewDesc(
 		prometheus.BuildFQName(Namespace, "instance", "events"),
 		"Upcoming events for instances - metric value is the number of seconds until the event",
