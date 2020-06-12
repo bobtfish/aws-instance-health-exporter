@@ -1,3 +1,18 @@
+0.0.3
+ - Add caching of results to reduce query load on AWS.
+
+   There's no point in re-querying the AWS API for data about events
+   that will happen in a few days time every few seconds to scrape.
+   Therefore caching has been implemented - this will stop concurrent
+   queries (only hitting the API once) by default, but can be turned
+   up to only query the API once every <duration>.
+
+   I only want to get the instance statuses from the AWS API
+   every 10m, but Prometheus needs to sample data every 2m to
+   maintain contiguous time series (strictly only every 5m,
+   but you want to scrape at least 2x this often to allow
+   for the occasional missed/failed scrape).
+
 0.0.2
   - Allow disabling internal metrics about the process
 
