@@ -20,6 +20,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/version"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -89,11 +90,11 @@ var (
 
 // Deliberately return the cached result for concurrent calls, even
 // if cache time is set to zero to avoid hitting the API serially
-func getEventsCached(client ec2iface.EC2API, howOld int) ([]instanceEvent, error) {
+func getEventsCached(client ec2iface.EC2API, howOld time.Duration) ([]instanceEvent, error) {
 	now := time.Now() // Store now from before we try to get the lock
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
-	if cachedAt.Add(time.Duration(howOld)).Before(now) {
+	if cachedAt.Add(howOld).Before(now) {
 		events, err := getEvents(client)
 		if err != nil { // Do not populate the cache if there was an error
 			return events, err
@@ -107,7 +108,7 @@ func getEventsCached(client ec2iface.EC2API, howOld int) ([]instanceEvent, error
 
 type exporter struct {
 	client   ec2iface.EC2API
-	cacheFor int
+	cacheFor time.Duration
 }
 
 func (e *exporter) Describe(ch chan<- *prometheus.Desc) {
@@ -141,7 +142,7 @@ func main() {
 		showVersion            = kingpin.Flag("version", "Print version information").Bool()
 		listenAddr             = kingpin.Flag("web.listen-address", "The address to listen on for HTTP requests.").Default(":9165").String()
 		region                 = kingpin.Flag("aws.region", "The AWS region").Default("us-east-1").String()
-		cache                  = kingpin.Flag("cache", "The amount of time in seconds to cache results for").Default("0").Int()
+		cache                  = kingpin.Flag("cache", "The amount of time to cache results for. (Prometheus time format, e.g. 10s, 5m)").Default("0").String()
 		disableExporterMetrics = kingpin.Flag(
 			"web.disable-exporter-metrics",
 			"Exclude metrics about the exporter itself (promhttp_*, process_*, go_*).",
@@ -177,9 +178,14 @@ func main() {
 		log.Fatal(err)
 	}
 
+	cacheDuration, err := model.ParseDuration(*cache)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	exporter := &exporter{
 		client:   ec2.New(sess),
-		cacheFor: *cache,
+		cacheFor: time.Duration(cacheDuration),
 	}
 	metricsRegistry.MustRegister(exporter)
 	handler := promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
