@@ -36,25 +36,24 @@ var (
 	instanceEvents *prometheus.Desc
 )
 
-type exporter struct {
-	client ec2iface.EC2API
+type instanceEvent struct {
+	instanceId string
+	code       string
+	eventTime  time.Time
 }
 
-func (e *exporter) Describe(ch chan<- *prometheus.Desc) {
-	ch <- instanceEvents
-}
-
-func (e *exporter) Collect(ch chan<- prometheus.Metric) {
+func getEvents(client ec2iface.EC2API) ([]instanceEvent, error) {
 	more := true
 	var nextToken *string
+	events := make([]instanceEvent, 0)
 	for more == true {
-		is, err := e.client.DescribeInstanceStatus(&ec2.DescribeInstanceStatusInput{
+		is, err := client.DescribeInstanceStatus(&ec2.DescribeInstanceStatusInput{
 			IncludeAllInstances: aws.Bool(false),
 			MaxResults:          aws.Int64(1000),
 			NextToken:           nextToken,
 		})
 		if err != nil {
-			panic(err)
+			return events, err
 		}
 		for _, s := range is.InstanceStatuses {
 			eventCount := len(s.Events)
@@ -63,9 +62,12 @@ func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 					if strings.HasPrefix(*e.Description, "[Completed]") {
 						continue
 					}
-					eventTime := *e.NotBefore
-					d := eventTime.Sub(time.Now())
-					ch <- prometheus.MustNewConstMetric(instanceEvents, prometheus.GaugeValue, d.Seconds(), *e.Code, *s.InstanceId)
+					event := instanceEvent{
+						eventTime:  *e.NotBefore,
+						code:       *e.Code,
+						instanceId: *s.InstanceId,
+					}
+					events = append(events, event)
 				}
 			}
 		}
@@ -74,6 +76,27 @@ func (e *exporter) Collect(ch chan<- prometheus.Metric) {
 		} else {
 			nextToken = is.NextToken
 		}
+	}
+	return events, nil
+}
+
+type exporter struct {
+	client   ec2iface.EC2API
+	cacheFor int
+}
+
+func (e *exporter) Describe(ch chan<- *prometheus.Desc) {
+	ch <- instanceEvents
+}
+
+func (e *exporter) Collect(ch chan<- prometheus.Metric) {
+	events, err := getEvents(e.client)
+	if err != nil {
+		panic(err)
+	}
+	for _, e := range events {
+		d := e.eventTime.Sub(time.Now())
+		ch <- prometheus.MustNewConstMetric(instanceEvents, prometheus.GaugeValue, d.Seconds(), e.code, e.instanceId)
 	}
 }
 
@@ -92,6 +115,7 @@ func main() {
 		showVersion            = kingpin.Flag("version", "Print version information").Bool()
 		listenAddr             = kingpin.Flag("web.listen-address", "The address to listen on for HTTP requests.").Default(":9165").String()
 		region                 = kingpin.Flag("aws.region", "The AWS region").Default("us-east-1").String()
+		cache                  = kingpin.Flag("cache", "The amount of time in seconds to cache results for").Default("0").Int()
 		disableExporterMetrics = kingpin.Flag(
 			"web.disable-exporter-metrics",
 			"Exclude metrics about the exporter itself (promhttp_*, process_*, go_*).",
@@ -127,7 +151,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	exporter := &exporter{client: ec2.New(sess)}
+	exporter := &exporter{
+		client:   ec2.New(sess),
+		cacheFor: *cache,
+	}
 	metricsRegistry.MustRegister(exporter)
 	handler := promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
 	if !*disableExporterMetrics {
